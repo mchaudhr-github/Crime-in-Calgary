@@ -1,0 +1,376 @@
+---
+TITLE: "BTMA 431 - FINAL PROJECT CODE"
+
+AUTHORS: "Muhammad Chaudhry" 
+         "Autumn Davidson" 
+         "Khizer Kamran" 
+         "Claire McEvoy" 
+         "Joan Penaojas"
+---
+
+
+```{r}
+
+#INSTALL PACKAGES IF NEEDED
+
+install.packages("httr")
+install.packages("XML")
+install.packages("stringr")
+install.packages("ggplot2")
+install.packages("tidyverse")
+install.packages("magrittr")
+install.packages("dplyr")
+install.packages("broom")
+```
+
+
+```{r}
+
+#LOAD NEEDED PACKAGES
+
+library(httr)
+library(XML)
+library(stringr)
+library(ggplot2)
+library(tidyverse) 
+library(magrittr)
+library(dplyr)
+library(broom)
+```
+
+
+```{r}
+
+#WEBSCRAPING FOR DEMOGRAPHIC DATA
+
+#followed these steps from 'Intro-to-Scraping' slides from d2l
+
+demographics.url <- 'https://great-news.ca/demographics/'
+
+#get HTML file
+get_HTML_file <- GET(demographics.url)
+
+#parse the HTML file into something R can work with
+demographics_parsed <- htmlParse(get_HTML_file)
+
+#readHTMLTable() function returns a list of html tables
+demographics.tables <- readHTMLTable(demographics_parsed, stringsAsFactors = FALSE)
+
+#this shows the table on Calgary Community Demographics (commented out)
+#View(demographics.tables[[1]])
+
+#extract dataframe from list
+demographics <- demographics.tables[[1]][,-2]
+```
+
+
+```{r}
+
+#MERGE SCRAPED DATA WITH DOWNLOADED DATA
+
+#Requires BTMA 431 Final Project Crime Data Original.csv file
+
+#Adding the crime data
+#Load the crime dataset and rename 2nd column:
+crime_calgary <- read.csv("BTMA 431 Final Project Crime Data Original.csv")
+colnames(crime_calgary)[2] <- "Community"
+
+#Format 'CommunityID' column to merge the dataframes with:
+#Make entirely lowercase and remove all spaces.
+crime_calgary$comID <- tolower(crime_calgary$Community)
+crime_calgary$comID <- gsub(' ', '', crime_calgary$comID)
+demographics$comID <- tolower(demographics$Community)
+demographics$comID <- gsub(' ', '', demographics$comID)
+
+#Combine the dataframes:
+crime_data <- merge(crime_calgary, demographics, by = "comID")
+
+#Remove redundant columns from the new dataframe, and rename duplicate:
+crime_data <- crime_data[-c(1,14)]
+colnames(crime_data)[2] <- "Community"
+
+#Combine "Violence 'Other' (Non-domestic)" with "Violence Other (Non-domestic)"
+crime_data$Category[grep("Violence", crime_data$Category, ignore.case = TRUE)] <-"Violence 'Other' (Non-domestic)"
+
+#Adding a season column based off month
+crime_data$season <- ifelse(crime_data$Month == "JAN" |crime_data$Month == "FEB" | crime_data$Month == "DEC",
+                            "WINTER",
+                            ifelse(crime_data$Month == "MAR" |crime_data$Month == "APR" | crime_data$Month == "MAY",
+                            "SPRING",
+                            ifelse(crime_data$Month == "JUN" |crime_data$Month == "JUL" | crime_data$Month == "AUG",
+                            "SUMMER",
+                            "FALL")))
+
+#write final dataframe to csv if needed (commented out)
+#write.csv(crime_data, "BTMA 431 Final Project Crime Data Final.csv", row.names = FALSE)
+```
+
+
+```{r}
+
+#BASIC ANALYSIS
+
+#What is the most common type of crime?
+
+crime_data$Category %>% extract2(which.max(crime_data$Crime.Count)) 
+
+#Theft from Vehicle has the highest crime count
+#Indicates the severity of the most infamous crimes
+#Provides citizens with a clear idea of how they can proactively avoid the most immediate threats to their quality of life
+```
+
+
+```{r}
+
+#BASIC ANALYSIS
+
+#Which community has the highest crime counts?
+  
+crime_data$Community %>% extract2(which.max(crime_data$Crime.Count)) 
+  
+#Beltline has the highest crime counts
+#Indicates where police personnel should be allocated to best protect citizens
+```
+
+
+```{r}
+
+#BASIC ANALYSIS
+
+#What times and dates have the highest crime counts occurred?
+
+crime_data$Date %>% extract2(which.max(crime_data$Crime.Count)) 
+
+#November 2019
+#This may provide more insight and evidence that holidays entices more criminal activity
+#Less sunlight and mild but not extreme cold temperatures may be causes of this. 
+```
+
+
+```{r}
+
+#BASIC ANALYSIS
+
+#What are the highest crime counts by year?
+
+#Filter for 2019 crime data
+crime_data_2019 <- crime_data %>% 
+  filter(Year == "2019")
+
+#Filter for 2018 crime data
+crime_data_2018 <- crime_data %>% 
+  filter(Year == "2018")
+
+#Filter for 2017 crime data
+crime_data_2017 <- crime_data %>% 
+  filter(Year == "2017")
+
+#Find the highest crime count in 2019 by date
+crime_data_2019$Date %>% extract2(which.max(crime_data_2019$Crime.Count)) 
+
+#Find the highest crime count in 2018 by date
+crime_data_2018$Date %>% extract2(which.max(crime_data_2018$Crime.Count)) 
+
+#Find the highest crime count in 2017 by date
+crime_data_2017$Date %>% extract2(which.max(crime_data_2017$Crime.Count)) 
+
+#Find the highest crime count in 2019 by category
+crime_data_2019$Category %>% extract2(which.max(crime_data_2019$Crime.Count)) 
+
+ #Find the highest crime count in 2018 by category
+crime_data_2018$Category %>% extract2(which.max(crime_data_2018$Crime.Count))
+
+#Find the highest crime count in 2017 by category
+crime_data_2017$Category %>% extract2(which.max(crime_data_2017$Crime.Count)) 
+  
+#Answers how effective are the police at reducing higher levels of crime
+#Why is there a switch? (Possible higher levels of arrests)
+```
+
+
+```{r}
+
+#BASIC ANALYSIS
+
+#What are the correlative relationships within this dataset?
+
+cor(crime_data$Resident.Count, crime_data$Crime.Count) 
+
+#0.2334967
+  
+#Resident count has some influence on the crime count
+#Not strong enough to say 100% directly
+```
+
+
+```{r}
+
+#Type of crime analysis
+type_lm <- lm(formula = crime_data$Crime.Count ~ crime_data$Category)
+
+
+summary(type_lm)
+
+#Here we can see that the most common types of crimes are ones involving theft from a vehicle while the least common is commercial robbery
+```
+
+
+```{r}
+
+#TIME OF YEAR ANALYSIS 
+
+time_lm <- lm(formula = crime_data$Crime.Count ~ crime_data$season +
+                                                 crime_data$Month)
+
+time2_lm <- lm(formula = crime_data$Crime.Count ~ crime_data$season)
+  summary(time_lm)
+  summary(time2_lm)
+
+#Comparing seasons we see that most crimes are likely to occur in the fall, with all other seasons having negative coefficients. 
+#Comparing months we see that winter months such as FEB and NOV decrease crime, while summer months such as AUG and JUL increase crime. 
+```
+
+
+```{r}
+
+#POPULATION ANALYSIS 
+
+#Create bins/ranges for the populations and dwellings
+
+#adjust dwellings column to be usable format
+crime_data$`Dwellings 2014` <- gsub(',', '', crime_data$`Dwellings 2014`)
+
+crime_data$`Dwellings 2014` <- as.numeric(crime_data$`Dwellings 2014`)
+
+#create bins for dwellings
+crime_data$Dwellings_Range <- ifelse(crime_data$`Dwellings 2014` < 1500,
+                              "Less than 1500",
+                              ifelse(crime_data$`Dwellings 2014` >= 1500 & crime_data$`Dwellings 2014` <3000,
+                              "1500 - 2999",
+                              ifelse(crime_data$`Dwellings 2014` >= 3000 & crime_data$`Dwellings 2014` <4500,
+                              "3000 - 4499",
+                              ifelse(crime_data$`Dwellings 2014` >= 4500 & crime_data$`Dwellings 2014` <6000,
+                              "4500-5999",
+                              "6000+"))))
+
+crime_data$Resident.Count <- as.numeric(crime_data$Resident.Count)
+
+#create bins for resident counts
+crime_data$Resident.Count_range <- ifelse(crime_data$Resident.Count < 5000,
+                                   "Less than 5000",
+                                   ifelse(crime_data$Resident.Count >= 5000 & crime_data$Resident.Count <10000,
+                                   "5000 - 9999",
+                                   ifelse(crime_data$Resident.Count >= 10000 & crime_data$Resident.Count <15000,
+                                   "10000 - 14999",
+                                   ifelse(crime_data$Resident.Count >= 15000 & crime_data$Resident.Count <20000,
+                                   "15000 - 19999",
+                                   ifelse(crime_data$Resident.Count >= 20000 & crime_data$Resident.Count <25000,
+                                   "20000 - 25000",
+                                   "25000+")))))
+
+pop_lm <- lm(formula = crime_data$Crime.Count ~ crime_data$Resident.Count_range +
+                                                crime_data$Dwellings_Range)
+
+
+summary(pop_lm)
+
+#Comparing resident counts we see that areas with higher populations of residents are more susceptible to crime with populations above 20000 greatly increasing the likelihood of crime. 
+#The number of dwellings follows similarly as an increase in the amount of dwellings increases the likelihood of crime. 
+```
+
+
+```{r}
+
+#INCOME ANALYSIS
+
+#adjust columns to usable format
+crime_data$`Median Household Income` <- gsub(',', '', crime_data$`Median Household Income`)
+crime_data$`Median Home Sale Price` <- gsub(',', '', crime_data$`Median Home Sale Price`)
+crime_data$`Median Household Income` <- substring(crime_data$`Median Household Income`, 2)
+crime_data$`Median Home Sale Price` <- substring(crime_data$`Median Home Sale Price`, 2)
+crime_data$`Median Household Income` <- as.numeric(crime_data$`Median Household Income`)
+crime_data$`Median Home Sale Price` <- as.numeric(crime_data$`Median Home Sale Price`)
+
+
+#create bins
+crime_data$Household_Income_Range <- ifelse(crime_data$`Median Household Income` < 50000,
+                                   "Less than 50000",
+                                   ifelse(crime_data$`Median Household Income` >= 50000 & crime_data$`Median Household Income` <100000,
+                                   "50000 - 99999",
+                                   ifelse(crime_data$`Median Household Income` >= 100000 & crime_data$`Median Household Income` <150000,
+                                   "100000 - 149999",
+                                   ifelse(crime_data$`Median Household Income` >= 150000 & crime_data$`Median Household Income` <200000,
+                                   "150000 - 199999",
+                                   "200000+"))))
+
+crime_data$Home_Price_Range <- ifelse(crime_data$`Median Home Sale Price` < 400000,
+                               "Less than 400000",
+                               ifelse(crime_data$`Median Home Sale Price` >= 400000 & crime_data$`Median Home Sale Price` <600000,
+                               "400000 - 599999",
+                               ifelse(crime_data$`Median Home Sale Price` >= 600000 & crime_data$`Median Home Sale Price` <800000,
+                               "600000 - 799999",
+                               ifelse(crime_data$`Median Home Sale Price` >= 800000 & crime_data$`Median Home Sale Price` <1000000,
+                               "800000 - 999999",
+                               "1000000+"))))
+
+income_lm <- lm(formula = crime_data$Crime.Count ~ crime_data$Household_Income_Range +
+                                                   crime_data$Home_Price_Range)
+
+
+summary(income_lm)
+#Comparing average household incomes we can see that households with incomes less than 50000 are much more susceptible to crime vs higher income households. 
+#Comparing average home prices we again see that lower valued homes are more susceptible to crime vs higher valued homes.
+```
+
+
+```{r}
+
+#LOCATION ANALYSIS
+
+location_lm <- lm(formula = crime_data$Crime.Count ~ crime_data$Community)
+
+location_lm2 <- lm(formula = crime_data$Crime.Count ~ crime_data$`City Quadrant`)
+
+location_lm3 <- lm(formula = crime_data$Crime.Count ~ crime_data$Sector)
+
+summary(location_lm)
+summary(location_lm2)
+summary(location_lm3)
+
+#Comparing all outputs we can come to three conclusions. 
+#1 - When comparing communities we can see most crime occurs in the Beltline
+#2 - When comparing quadrants we can see that most crime occurs in the NE
+#3 - When comparing sectors we can see that most crime occurs in the centre sector 
+```
+
+
+```{r}
+
+#EXPORTING OF REGRESSION TABLES
+
+#Exporting regression tables using the broom packages tidy function
+
+clean_income_lm <- tidy(income_lm) 
+write.csv(clean_income_lm, "Income_LM.csv")
+
+clean_location_lm <- tidy(location_lm) 
+write.csv(clean_location_lm, "Community_LM.csv")
+
+clean_location_lm2 <- tidy(location_lm2) 
+write.csv(clean_location_lm2, "Quadrant_LM.csv")
+
+clean_location_lm3 <- tidy(location_lm3) 
+write.csv(clean_location_lm3, "Sector_LM.csv")
+
+clean_pop_lm <- tidy(pop_lm) 
+write.csv(clean_pop_lm, "POP_LM.csv")
+
+clean_time_lm <- tidy(time_lm) 
+write.csv(clean_time_lm, "Season_Month_LM.csv")
+
+clean_type_lm <- tidy(type_lm) 
+write.csv(clean_type_lm, "Type_LM.csv")
+
+
+```
+
